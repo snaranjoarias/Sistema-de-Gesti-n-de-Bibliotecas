@@ -78,3 +78,12 @@ defmodule Library do
     if user, do: user.borrowed_books, else: []
   end
 end
+#Buscar un libro por título o autor
+
+  def search_books(library, query) do
+    Enum.filter(library, fn book ->
+      String.contains?(String.downcase(book.title), String.downcase(query)) ||
+      String.contains?(String.downcase(book.author), String.downcase(query))
+    end)
+  end
+end
