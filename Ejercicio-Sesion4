@@ -1,0 +1,197 @@
+defmodule Library do
+  defmodule Book do
+    defstruct title: "", author: "", isbn: "", available: true
+  end
+
+  defmodule User do
+    defstruct name: "", id: "", borrowed_books: []
+  end
+
+  def add_book(library, %Book{} = book) do
+    library ++ [book]
+  end
+
+  def add_user(users, %User{} = user) do
+    users ++ [user]
+  end
+
+  def borrow_book(library, users, user_id, isbn) do
+    user = Enum.find(users, &(&1.id == user_id))
+    book = Enum.find(library, &(&1.isbn == isbn && &1.available))
+
+    cond do
+      user == nil -> {:error, "Usuario no encontrado"}
+      book == nil -> {:error, "Libro no disponible"}
+      true ->
+        updated_book = %{book | available: false}
+        updated_user = %{user | borrowed_books: user.borrowed_books ++ [updated_book]}
+
+        updated_library = Enum.map(library, fn
+          b when b.isbn == isbn -> updated_book
+          b -> b
+        end)
+
+        updated_users = Enum.map(users, fn
+          u when u.id == user_id -> updated_user
+          u -> u
+        end)
+
+        {:ok, updated_library, updated_users}
+    end
+  end
+
+  def return_book(library, users, user_id, isbn) do
+    user = Enum.find(users, &(&1.id == user_id))
+    book = Enum.find(user.borrowed_books, &(&1.isbn == isbn))
+
+    cond do
+      user == nil -> {:error, "Usuario no encontrado"}
+      book == nil -> {:error, "Libro no encontrado en los libros prestados del usuario"}
+      true ->
+        updated_book = %{book | available: true}
+        updated_user = %{user | borrowed_books: Enum.filter(user.borrowed_books, &(&1.isbn != isbn))}
+
+        updated_library = Enum.map(library, fn
+          b when b.isbn == isbn -> updated_book
+          b -> b
+        end)
+
+        updated_users = Enum.map(users, fn
+          u when u.id == user_id -> updated_user
+          u -> u
+        end)
+
+        {:ok, updated_library, updated_users}
+    end
+  end
+
+  def list_books(library) do
+    library
+  end
+
+  def list_users(users) do
+    users
+  end
+
+  # Buscar libro por título o autor
+  def books_borrowed_by_user(users, user_id) do
+    user = Enum.find(users, &(&1.id == user_id))
+    if user, do: user.borrowed_books, else: []
+  end
+
+  # Listar libros prestados
+  def search_books(library, query) do
+    Enum.filter(library, fn book ->
+      String.contains?(String.downcase(book.title), String.downcase(query)) ||
+      String.contains?(String.downcase(book.author), String.downcase(query))
+    end)
+  end
+end
+
+# Interactivo
+defmodule LibraryCLI do
+  alias Library.{Book, User}
+
+  def start do
+    library = []
+    users = []
+    loop(library, users)
+  end
+
+  defp loop(library, users) do
+    IO.puts("Bienvenido a la Biblioteca!")
+    IO.puts("Seleccione una opción:")
+    IO.puts("1. Añadir libro")
+    IO.puts("2. Añadir usuario")
+    IO.puts("3. Prestar libro")
+    IO.puts("4. Devolver libro")
+    IO.puts("5. Listar libros")
+    IO.puts("6. Listar usuarios")
+    IO.puts("7. Buscar libro")
+    IO.puts("8. Listar libros prestados")
+    IO.puts("9. Salir")
+
+    case IO.gets("Opción: ") |> String.trim() do
+      "1" -> 
+        library = add_book_interactive(library)
+        loop(library, users)
+      "2" -> 
+        users = add_user_interactive(users)
+        loop(library, users)
+      "3" -> 
+        {library, users} = borrow_book_interactive(library, users)
+        loop(library, users)
+      "4" -> 
+        {library, users} = return_book_interactive(library, users)
+        loop(library, users)
+      "5" -> 
+        IO.inspect(Library.list_books(library))
+        loop(library, users)
+      "6" -> 
+        IO.inspect(Library.list_users(users))
+        loop(library, users)
+      "7" -> 
+        search_books_interactive(library)
+        loop(library, users)
+      "8" -> 
+        list_borrowed_books_interactive(users)
+        loop(library, users)
+      "9" -> 
+        IO.puts("Saliendo...")
+      _ -> 
+        IO.puts("Opción no válida. Intente de nuevo.")
+        loop(library, users)
+    end
+  end
+
+  defp add_book_interactive(library) do
+    title = IO.gets("Título del libro: ") |> String.trim()
+    author = IO.gets("Autor del libro: ") |> String.trim()
+    isbn = IO.gets("ISBN del libro: ") |> String.trim()
+    book = %Book{title: title, author: author, isbn: isbn}
+    Library.add_book(library, book)
+  end
+
+  defp add_user_interactive(users) do
+    name = IO.gets("Nombre del usuario: ") |> String.trim()
+    id = IO.gets("ID del usuario: ") |> String.trim()
+    user = %User{name: name, id: id}
+    Library.add_user(users, user)
+  end
+
+  defp borrow_book_interactive(library, users) do
+    user_id = IO.gets("ID del usuario: ") |> String.trim()
+    isbn = IO.gets("ISBN del libro: ") |> String.trim()
+    case Library.borrow_book(library, users, user_id, isbn) do
+      {:ok, updated_library, updated_users} -> 
+        {updated_library, updated_users}
+      {:error, message} -> 
+        IO.puts(message)
+        {library, users}
+    end
+  end
+
+  defp return_book_interactive(library, users) do
+    user_id = IO.gets("ID del usuario: ") |> String.trim()
+    isbn = IO.gets("ISBN del libro: ") |> String.trim()
+    case Library.return_book(library, users, user_id, isbn) do
+      {:ok, updated_library, updated_users} -> 
+        {updated_library, updated_users}
+      {:error, message} -> 
+        IO.puts(message)
+        {library, users}
+    end
+  end
+
+  defp search_books_interactive(library) do
+    query = IO.gets("Buscar por título o autor: ") |> String.trim()
+    results = Library.search_books(library, query)
+    IO.inspect(results)
+  end
+
+  defp list_borrowed_books_interactive(users) do
+    user_id = IO.gets("ID del usuario: ") |> String.trim()
+    borrowed_books = Library.books_borrowed_by_user(users, user_id)
+    IO.inspect(borrowed_books)
+  end
+end
